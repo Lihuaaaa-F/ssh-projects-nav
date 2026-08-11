@@ -1,6 +1,10 @@
 ﻿# -*- coding: utf-8 -*-
 param([string]$Agent, [string]$Keyword)
 
+
+
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+function Out-Term { param([string]$T) $s = [Console]::OpenStandardOutput(); $b = [System.Text.Encoding]::UTF8.GetBytes($T + "`r`n"); $s.Write($b, 0, $b.Length); $s.Flush() }
 $tsv = "$env:USERPROFILE\.oc-projects.tsv"
 # 私有配置(不入库):Junction 别名由 ssh-projects-nav.config.ps1 提供,不假设任何个人路径
 $altUserRoot = $null
@@ -37,30 +41,39 @@ $lines = @(Get-Content $tsv -Encoding UTF8 -ErrorAction SilentlyContinue | Where
     } else { $_ }
 })
 
+
+
 if (-not $Keyword) {
-    if ($lines.Count -eq 0) { Write-Host "列表为空,先运行 refresh" }
+    if ($lines.Count -eq 0) { Out-Term "列表为空,先运行 refresh" }
     else {
+        $dispW = { param($s) $n = 0; foreach ($ch in $s.ToCharArray()) { if ([int]$ch -gt 0x2E7F) { $n += 2 } else { $n += 1 } }; return $n }
+        $maxW = 0
+        foreach ($l in $lines) { $n = & $dispW (($l -split '#', 3)[0]); if ($n -gt $maxW) { $maxW = $n } }
         $grouped = @{ 'cl' = @(); 'cx' = @(); 'oc' = @() }
         $lines | ForEach-Object {
             $p = $_ -split '#', 3
             $name = $p[0]
             $agent = if ($name -like 'cl-*') { 'cl' } elseif ($name -like 'cx-*') { 'cx' } else { 'oc' }
-            $grouped[$agent] += ("{0} {1}   <- {2}" -f $agent, $name, $p[1])
+            $grouped[$agent] += ("{0} {1}{2}  <- {3}" -f $agent, $name, (' ' * ($maxW - (& $dispW $name))), $p[1])
         }
         foreach ($ag in @('oc', 'cl', 'cx')) {
             if ($grouped[$ag].Count -eq 0) { continue }
             $label = switch ($ag) { 'oc' { 'opencode' } 'cl' { 'Claude' } 'cx' { 'Codex' } }
-            Write-Host ""
-            Write-Host "=== $label ==="
-            $grouped[$ag] | ForEach-Object { Write-Host $_ }
+            Out-Term ""
+            Out-Term "=== $label ==="
+            foreach ($x in $grouped[$ag]) { Out-Term $x }
         }
     }
-    Write-Host ""
-    Write-Host "复制上面任意一行粘贴运行,即可进入并启动对应agent"
+    Out-Term ""
+    Out-Term "复制上面任意一行粘贴运行,即可进入并启动对应agent"
     exit 0
 }
 
+
+
 $dir = $null
+
+
 
 # 输入容错:去首尾空格
 $Keyword = $Keyword.Trim()
@@ -71,8 +84,12 @@ $keywordSecond = if ($tokens.Count -gt 1 -and $tokens[0] -match '^(oc|cl|cx)$') 
 # 全角冒号转半角
 $keywordNormal = $keywordFirst.Replace('：', ':')
 
+
+
 # 候选列表: 完整key、第一个token、第二个token(去agent前缀)、去掉前缀的key、模糊
 $candidates = @($Keyword, $keywordFirst, $keywordSecond, $keywordNormal) | Where-Object { $_ } | Select-Object -Unique
+
+
 
 foreach ($cand in $candidates) {
     foreach ($line in $lines) {
@@ -81,6 +98,8 @@ foreach ($cand in $candidates) {
     }
     if ($dir) { break }
 }
+
+
 
 # 仍没找到:前缀优先(精确 prefix),子串兜底
 if (-not $dir) {
@@ -109,19 +128,25 @@ if (-not $dir) {
     }
 }
 
-if (-not $dir) { Write-Host "没有找到与 '$Keyword' 匹配的项目"; exit 1 }
+
+
+if (-not $dir) { Out-Term "没有找到与 '$Keyword' 匹配的项目"; exit 1 }
 if (-not (Test-Path $dir)) {
-    Write-Host "目录不存在: $dir"
+    Out-Term "目录不存在: $dir"
     # 自动从库中移除失效路径(该路径对应行全部删除)
     $dirOff = $dir.TrimEnd('\')
     $alive = @($lines | Where-Object { ($_ -split '#', 3)[1].TrimEnd('\') -ne $dirOff })
     Write-ProjectFileAtomicRaw $tsv ($alive | ForEach-Object { $q = $_ -split '#', 3; "{0}#{1}#{2}" -f (Get-KeyEnc $q[0]), $q[1], $q[2] })
-    Write-Host "已从项目库移除失效条目(剩余 $($alive.Count) 条)"
+    Out-Term "已从项目库移除失效条目(剩余 $($alive.Count) 条)"
     exit 1
 }
 
+
+
 Set-Location $dir
-Write-Host "已进入: $dir"
+Out-Term "已进入: $dir"
+
+
 
 # 更新时间戳 + 重新排序:该路径在所有行里对应的时间置为现在,然后按时间倒序重写
 $now = [int64]((Get-Date).ToUniversalTime() - [datetime]::new(1970,1,1,0,0,0,[datetimekind]::Utc)).TotalMilliseconds
@@ -130,6 +155,8 @@ $newLines = $lines | ForEach-Object {
     $p = $_ -split '#', 3
     if ($p[1].TrimEnd('\') -eq $dirNorm) { "{0}#{1}#{2}" -f $p[0], $p[1], $now } else { $_ }
 }
+
+
 
 # 去重:按归一化路径(去尾斜杠+小写)保留时间戳最大者,再按 key 去重
 $byPath = @{}
@@ -155,9 +182,13 @@ $writeLines = @($byKey.Values | Sort-Object { [int64](($_ -split '#', 3)[2]) } -
 })
 Write-ProjectFileAtomicRaw $tsv $writeLines
 
+
+
 switch ($Agent) {
     'oc' { opencode }
     'cl' { claude }
     'cx' { codex }
     default { }
 }
+
+

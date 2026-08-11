@@ -9,13 +9,14 @@ go            # 列出全部项目(按最近使用倒序)
 oc 项目名      # 进入项目并启动 opencode
 cl 项目名      # 进入项目并启动 Claude Code
 cx 项目名      # 进入项目并启动 Codex
-refresh       # 手动重扫(10 分钟内有缓存)
+refresh       # 手动全量重扫(go 每次列出也会自动重扫)
 ```
 
 名称支持完整 key、路径片段、或项目目录名前缀,如 `cl-dual`、`webapp-main`。
 
 ```bash
 $ go
+已刷新: 12 项(自动最多60,手动不淘汰)
 === opencode ===
 oc oc-app1-main   <- D:\projects\app1
 oc oc-my-project  <- D:\workspace\my-project
