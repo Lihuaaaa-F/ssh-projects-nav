@@ -76,3 +76,7 @@ $ocRealUserRoot = $env:USERPROFILE
 | 手动锁定项目(不淘汰) | `go-add 名称 路径` |
 | 取消锁定 | `go-rm 名称` |
 | 追加扫描目录 | `go-roots D:\xxx` |
+
+## 更新日志
+
+历次变更见 [CHANGELOG.md](CHANGELOG.md)。
